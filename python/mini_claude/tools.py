@@ -316,8 +316,11 @@ def _list_files(inp: dict) -> str:
         for p in base.glob(pattern):
             if p.is_file():
                 rel = str(p.relative_to(base) if base != Path(".") else p)
-                # Skip node_modules and .git
-                if "node_modules" in rel or ".git" in rel.split(os.sep):
+                # Skip node_modules / hidden components by exact path part —
+                # a substring test would also drop a file merely *named*
+                # like "my_node_modules_note.txt". Skipping dotfiles matches
+                # the TS glob behavior (dot:false).
+                if any(part == "node_modules" or part.startswith(".") for part in Path(rel).parts):
                     continue
                 # Keep at most 200 entries, but keep counting so the model
                 # knows how many matches were omitted (matches TS behavior).
@@ -367,7 +370,13 @@ def _grep_search(inp: dict) -> str:
 
 
 def _grep_python(pattern: str, directory: str, include: str | None) -> str:
-    regex = re.compile(pattern)
+    try:
+        regex = re.compile(pattern)
+    except re.error as e:
+        # A model-supplied bad regex must come back as a tool error string,
+        # not crash the agent loop (system grep exit 2 also falls through
+        # to here with the same broken pattern).
+        return f"Error: invalid regex pattern: {e}"
     include_pattern = include
     matches: list[str] = []
     extra = 0
@@ -438,6 +447,11 @@ def _web_fetch(inp: dict) -> str:
 
     url = inp.get("url", "")
     max_length = inp.get("max_length", 50000)
+    # urllib happily opens file:// and other schemes — that would turn a
+    # "web" fetch into local file disclosure. http(s) only (TS fetch already
+    # rejects non-http schemes).
+    if not url.lower().startswith(("http://", "https://")):
+        return "Error: only http(s) URLs are supported"
     req = urllib.request.Request(url, headers={"User-Agent": "mini-claude/1.0"})
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -593,6 +607,15 @@ def check_permission(
             return {"action": "deny", "message": f"Blocked in plan mode: {tool_name}"}
         if tool_name == "run_shell":
             return {"action": "deny", "message": "Shell commands blocked in plan mode"}
+
+    if mode == "bypassPermissions":
+        return {"action": "allow"}
+
+    if rule_result == "allow":
+        return {"action": "allow"}
+
+    if tool_name in READ_TOOLS:
+        return {"action": "allow"}
 
     if tool_name in ("enter_plan_mode", "exit_plan_mode"):
         return {"action": "allow"}

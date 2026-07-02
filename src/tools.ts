@@ -309,9 +309,10 @@ function autoUpdateMemoryIndex(filePath: string): void {
   try {
     const memDir = getMemoryDir();
     if (filePath.startsWith(memDir) && filePath.endsWith(".md") && !filePath.endsWith("MEMORY.md")) {
-      // Re-import dynamically to avoid circular — but we already import getMemoryDir
-      // Rebuild the index from all memory files
-      const { readdirSync } = require("fs");
+      // Rebuild the index from all memory files. NOTE: must use the ESM
+      // import from the top of this file — `require()` does not exist at
+      // runtime in ESM, and the throw was silently swallowed by the outer
+      // catch, so the index was never rebuilt.
       const files = readdirSync(memDir).filter(
         (f: string) => f.endsWith(".md") && f !== "MEMORY.md"
       );
@@ -432,7 +433,7 @@ function grepSearch(input: {
       args.push(input.path || ".");
       const result = execFileSync("grep", args, {
         encoding: "utf-8",
-        maxBuffer: 1024 * 1024,
+        maxBuffer: 10 * 1024 * 1024,
         timeout: 10000,
       });
       const lines = result.split("\n").filter(Boolean);
@@ -440,6 +441,11 @@ function grepSearch(input: {
         (lines.length > 100 ? `\n... and ${lines.length - 100} more matches` : "");
     } catch (e: any) {
       if (e.status === 1) return "No matches found.";
+      if (e.code === "ENOBUFS") {
+        // Huge match sets overflow the exec buffer before we can slice —
+        // return a usable error instead of a bare spawn failure.
+        return "Error: too many matches to buffer; narrow the pattern, path, or include filter.";
+      }
       return `Error: ${e.message}`;
     }
   }
@@ -448,7 +454,14 @@ function grepSearch(input: {
 }
 
 function grepJS(pattern: string, dir: string, include?: string): string {
-  const re = new RegExp(pattern);
+  let re: RegExp;
+  try {
+    re = new RegExp(pattern);
+  } catch (e: any) {
+    // A model-supplied bad regex must come back as a tool error string,
+    // not crash the agent loop.
+    return `Error: invalid regex pattern: ${e.message}`;
+  }
   const includeRe = include ? new RegExp(include.replace(/\*/g, ".*").replace(/\?/g, ".")) : null;
   const matches: string[] = [];
   let extra = 0;
@@ -648,6 +661,17 @@ export function checkPermission(
       return { action: "deny", message: "Shell commands blocked in plan mode" };
     }
   }
+
+  // bypassPermissions (--yolo): skip confirmations for everything else
+  if (mode === "bypassPermissions") return { action: "allow" };
+
+  if (ruleResult === "allow") {
+    return { action: "allow" };
+  }
+
+  // Step 3: Mode-specific logic
+  // Read tools are always allowed in all modes
+  if (READ_TOOLS.has(toolName)) return { action: "allow" };
 
   // plan mode tools: always allow (handled in agent.ts)
   if (toolName === "enter_plan_mode" || toolName === "exit_plan_mode") {

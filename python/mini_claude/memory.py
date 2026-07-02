@@ -305,8 +305,12 @@ def start_memory_prefetch(
     session_memory_bytes: int,
 ) -> MemoryPrefetch | None:
     """Start async memory prefetch. Returns handle to poll for results."""
-    # Gate: multi-word input only
-    if not re.search(r"\s", query.strip()):
+    # Gate: substantial input only — 2+ CJK chars or multi-word. A pure
+    # whitespace test would never trigger for CJK queries like "部署流程"
+    # (no spaces). Mirrors the TS isQuerySubstantial() logic.
+    stripped = query.strip()
+    cjk_count = len(re.findall(r"[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]", stripped))
+    if cjk_count < 2 and not re.search(r"\s", stripped):
         return None
 
     # Gate: session budget

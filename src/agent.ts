@@ -752,7 +752,9 @@ export class Agent {
 
     const dir = join(homedir(), ".mini-claude", "tool-results");
     mkdirSync(dir, { recursive: true });
-    const filename = `${Date.now()}-${toolName}.txt`;
+    // uuid suffix: parallel tools can persist in the same millisecond — a
+    // timestamp-only name would let the second write clobber the first.
+    const filename = `${Date.now()}-${randomUUID().slice(0, 8)}-${toolName}.txt`;
     const filepath = join(dir, filename);
     writeFileSync(filepath, result);
 

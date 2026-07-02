@@ -633,7 +633,9 @@ class Agent:
             return result
         d = Path.home() / ".mini-claude" / "tool-results"
         d.mkdir(parents=True, exist_ok=True)
-        filename = f"{int(time.time() * 1000)}-{tool_name}.txt"
+        # uuid suffix: parallel tools can persist in the same millisecond —
+        # a timestamp-only name would let the second write clobber the first.
+        filename = f"{int(time.time() * 1000)}-{uuid.uuid4().hex[:8]}-{tool_name}.txt"
         filepath = d / filename
         filepath.write_text(result, encoding="utf-8")
 
