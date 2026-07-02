@@ -23,6 +23,7 @@ from .tools import (
     get_active_tool_definitions,
     ToolDef,
     PermissionMode,
+    _truncate_result,
 )
 from .memory import (
     start_memory_prefetch,
@@ -640,7 +641,10 @@ class Agent:
         preview = "\n".join(lines[:200])
         size_kb = len(result.encode()) / 1024
 
-        return (
+        # Truncate AFTER persisting: the full result is already safe on disk,
+        # so this only guards against pathological previews (e.g. a single
+        # multi-hundred-KB line). Order matters — see issue #6.
+        return _truncate_result(
             f"[Result too large ({size_kb:.1f} KB, {len(lines)} lines). "
             f"Full output saved to {filepath}. "
             f"You can use read_file to see the full result.]\n\n"

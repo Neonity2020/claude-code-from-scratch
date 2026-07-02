@@ -705,7 +705,7 @@ export function needsConfirmation(
 
 const MAX_RESULT_CHARS = 50000;
 
-function truncateResult(result: string): string {
+export function truncateResult(result: string): string {
   if (result.length <= MAX_RESULT_CHARS) return result;
   const keepEach = Math.floor((MAX_RESULT_CHARS - 60) / 2);
   return (
@@ -849,7 +849,10 @@ export async function executeTool(
     default:
       return `Unknown tool: ${name}`;
   }
-  return truncateResult(result);
+  // Return the full result untruncated: the agent layer persists large
+  // results to disk first (persistLargeResult), then truncates as a safety
+  // net. Truncating here would destroy data before persistence (issue #6).
+  return result;
 }
 
 // Reset permission cache (for testing)

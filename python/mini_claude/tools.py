@@ -649,7 +649,10 @@ async def execute_tool(
                 read_file_state[abs_path] = os.path.getmtime(abs_path)
             except OSError:
                 pass
-        return _truncate_result(result)
+        # Return the full result untruncated: the agent layer persists large
+        # results to disk first (persistLargeResult), then truncates as a
+        # safety net. Truncating here would destroy data before persistence.
+        return result
 
     if name in ("write_file", "edit_file") and read_file_state is not None:
         abs_path = str(Path(inp["file_path"]).resolve())
@@ -689,7 +692,7 @@ async def execute_tool(
     handler = handlers.get(name)
     if not handler:
         return f"Unknown tool: {name}"
-    result = _truncate_result(handler(inp))
+    result = handler(inp)
 
     # Update mtime after successful write/edit
     if name in ("write_file", "edit_file") and read_file_state is not None and not result.startswith("Error"):

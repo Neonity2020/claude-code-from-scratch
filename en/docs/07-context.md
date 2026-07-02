@@ -107,7 +107,7 @@ def _truncate_result(result: str) -> str:
 
 Keeping both head and tail rather than just the head: the beginning of files contains imports, class definitions, and other structural information, while command output error summaries are typically at the end.
 
-Difference from Claude Code: Claude Code persists to disk, and the model can retrieve full content later with the Read tool. We now also implement persistence -- see persistLargeResult below. The two tiers work together: persistLargeResult first intercepts results >30KB and saves them to disk, then truncateResult handles content that passed the first tier but still exceeds 50K.
+Difference from Claude Code: Claude Code persists to disk, and the model can retrieve full content later with the Read tool. We now also implement persistence -- see persistLargeResult below. The two tiers work together, and the order is critical: the tool layer returns the **full** result, the agent layer first persists anything >30KB to disk in full via persistLargeResult (keeping only a preview in context), and truncateResult runs **after** persistence as a safety net -- it only fires in pathological cases (e.g. a preview message dominated by one enormous line). truncateResult must NOT run at the tool layer first: that would put an already-truncated result on disk, losing information before persistence (exactly the bug fixed in issue #6).
 
 ### Tier 0.5: Large Result Persistence (persistLargeResult)
 

@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 import chalk from "chalk";
-import { toolDefinitions, executeTool, checkPermission, CONCURRENCY_SAFE_TOOLS, getActiveToolDefinitions, getDeferredToolNames, type ToolDef, type PermissionMode } from "./tools.js";
+import { toolDefinitions, executeTool, checkPermission, CONCURRENCY_SAFE_TOOLS, getActiveToolDefinitions, getDeferredToolNames, truncateResult, type ToolDef, type PermissionMode } from "./tools.js";
 import {
   printAssistantText,
   printToolCall,
@@ -760,7 +760,10 @@ export class Agent {
     const preview = lines.slice(0, 200).join("\n");
     const sizeKB = (Buffer.byteLength(result) / 1024).toFixed(1);
 
-    return `[Result too large (${sizeKB} KB, ${lines.length} lines). Full output saved to ${filepath}. You can use read_file to see the full result.]\n\nPreview (first 200 lines):\n${preview}`;
+    // Truncate AFTER persisting: the full result is already safe on disk, so
+    // this only guards against pathological previews (e.g. a single
+    // multi-hundred-KB line). Order matters — see issue #6.
+    return truncateResult(`[Result too large (${sizeKB} KB, ${lines.length} lines). Full output saved to ${filepath}. You can use read_file to see the full result.]\n\nPreview (first 200 lines):\n${preview}`);
   }
 
   private async executeToolCall(
