@@ -2,7 +2,9 @@
 
 ## Chapter Goals
 
-Construct a System Prompt that turns an LLM into a competent coding agent: telling it its identity, rules, tool usage strategies, and environment information.
+Last chapter the agent got a set of tools, but it still doesn't know who it is, what environment it's working in, or when to be careful — all of which lives in the System Prompt, the first block of text assembled before every model call. This chapter builds it.
+
+Split in two: a static core with identity, rules, and tool preferences, byte-identical across sessions (which makes it cacheable — Chapter 7 leans on that); and a dynamic half assembled each time with the current environment facts — OS, working directory, Git state, and the project's own `CLAUDE.md`.
 
 ```mermaid
 graph TB
@@ -21,71 +23,6 @@ graph TB
     style Dynamic fill:#e8e0ff
     style Reminder fill:#e8e0ff
 ```
-
-## How Claude Code Does It
-
-Claude Code's System Prompt is not a haphazard pile of instructions -- it's an engineering artifact, iteratively refined through extensive A/B testing and model behavior observation.
-
-### 7-Layer Progressive Structure
-
-The prompt is organized from abstract to concrete in 7 layers -- **first establishing the identity and constraint framework, then filling in specific behavioral guidance**. This order matters: concepts the model establishes first become the framework for understanding subsequent content.
-
-```
-1. Identity   -> Who am I? interactive agent
-2. System     -> Basic facts about the runtime environment
-3. Doing Tasks -> How to write code? (anti-pattern inoculation)
-4. Actions    -> Which operations need confirmation? (blast radius framework)
-5. Using Tools -> How to use tools? (preference mapping table)
-6. Tone & Style -> What output format?
-7. Output Efficiency -> How to be more concise?
-```
-
-### Anti-Pattern Inoculation
-
-**Explicitly telling the model "what not to do" is far more effective than only describing "what to do."**
-
-Positive instructions ("be concise") leave room for the model to self-rationalize -- it may think "adding comments makes code more concise and readable," then add docstrings to every function. Negative instructions ("don't add docstrings to code you didn't change") eliminate room for interpretation.
-
-Claude Code's Doing Tasks section has three precise "don'ts":
-
-- **Don't expand scope**: Fixing a bug doesn't mean refactoring surrounding code
-- **Don't code defensively**: Don't add try-catch and validation for impossible scenarios
-- **Don't abstract prematurely**: "Three similar lines of code is better than a premature abstraction"
-
-The value of these rules is not in the concepts (everyone knows "don't over-engineer"), but in the **precision of the wording** -- giving the model specific judgment criteria rather than vague principles.
-
-### Blast Radius Framework
-
-The Actions section doesn't enumerate "can't do X, Y, Z" -- instead it teaches the model a **risk assessment framework**:
-
-```
-Carefully consider the reversibility and blast radius of actions.
-```
-
-A two-dimensional model: **reversibility x impact scope**. High risk = irreversible + affects shared environments (force push, deleting cloud resources); low risk = reversible + local impact only (editing local files).
-
-This scales far better than exhaustive rules -- when the model encounters a new scenario not on the rule list (like calling an API to delete cloud resources), it can reason on its own rather than not knowing what to do.
-
-There's also a critical rule: a user approving one operation does not mean they approve all similar operations. Each authorization is valid only for the current scope.
-
-### Tool Preference Mapping Table
-
-Claude Code explicitly requires the model to use dedicated tools rather than bash commands in the prompt:
-
-```
-Use Read instead of cat/head/tail
-Use Edit instead of sed/awk
-Use Glob instead of find/ls
-Use Grep instead of grep/rg
-```
-
-Dedicated tools and bash commands are functionally similar at the low level; the difference is in user experience: permissions can be fine-grained (separate authorization for reads vs. writes), output is structured, and parallel calling is natively supported. Without this mapping table, the model defaults to what appears most in training data -- various bash commands.
-
-### CLAUDE.md Hierarchical Discovery
-
-CLAUDE.md is a project-level instruction file, similar to `.eslintrc` but for AI. Claude Code loads it from 5 locations: global admin policy -> user home directory -> project directory (traversing upward from CWD) -> local files -> command-line specified directory.
-
-Files closer to CWD are **loaded later with higher priority** -- leveraging the LLM's recency bias, subdirectory rules can override parent directory rules.
 
 ## Our Implementation
 
@@ -419,4 +356,72 @@ export function loadClaudeMd(): string {
 
 ---
 
-> **Next chapter**: With tools and prompts in place, the next step is making the Agent interactive -- CLI entry, REPL loop, and session persistence.
+## What the Real Claude Code Does Beyond This
+
+Our prompt got by on a static core plus one block of environment info. Claude Code's System Prompt is an engineering artifact, iteratively refined through extensive A/B testing and model behavior observation — and what it adds is taking "make the model reliably do as told" to its limit.
+
+### 7-Layer Progressive Structure
+
+The prompt is organized from abstract to concrete in 7 layers -- **first establishing the identity and constraint framework, then filling in specific behavioral guidance**. This order matters: concepts the model establishes first become the framework for understanding subsequent content.
+
+```
+1. Identity   -> Who am I? interactive agent
+2. System     -> Basic facts about the runtime environment
+3. Doing Tasks -> How to write code? (anti-pattern inoculation)
+4. Actions    -> Which operations need confirmation? (blast radius framework)
+5. Using Tools -> How to use tools? (preference mapping table)
+6. Tone & Style -> What output format?
+7. Output Efficiency -> How to be more concise?
+```
+
+### Anti-Pattern Inoculation
+
+**Explicitly telling the model "what not to do" is far more effective than only describing "what to do."**
+
+Positive instructions ("be concise") leave room for the model to self-rationalize -- it may think "adding comments makes code more concise and readable," then add docstrings to every function. Negative instructions ("don't add docstrings to code you didn't change") eliminate room for interpretation.
+
+Claude Code's Doing Tasks section has three precise "don'ts":
+
+- **Don't expand scope**: Fixing a bug doesn't mean refactoring surrounding code
+- **Don't code defensively**: Don't add try-catch and validation for impossible scenarios
+- **Don't abstract prematurely**: "Three similar lines of code is better than a premature abstraction"
+
+The value of these rules is not in the concepts (everyone knows "don't over-engineer"), but in the **precision of the wording** -- giving the model specific judgment criteria rather than vague principles.
+
+### Blast Radius Framework
+
+The Actions section doesn't enumerate "can't do X, Y, Z" -- instead it teaches the model a **risk assessment framework**:
+
+```
+Carefully consider the reversibility and blast radius of actions.
+```
+
+A two-dimensional model: **reversibility x impact scope**. High risk = irreversible + affects shared environments (force push, deleting cloud resources); low risk = reversible + local impact only (editing local files).
+
+This scales far better than exhaustive rules -- when the model encounters a new scenario not on the rule list (like calling an API to delete cloud resources), it can reason on its own rather than not knowing what to do.
+
+There's also a critical rule: a user approving one operation does not mean they approve all similar operations. Each authorization is valid only for the current scope.
+
+### Tool Preference Mapping Table
+
+Claude Code explicitly requires the model to use dedicated tools rather than bash commands in the prompt:
+
+```
+Use Read instead of cat/head/tail
+Use Edit instead of sed/awk
+Use Glob instead of find/ls
+Use Grep instead of grep/rg
+```
+
+Dedicated tools and bash commands are functionally similar at the low level; the difference is in user experience: permissions can be fine-grained (separate authorization for reads vs. writes), output is structured, and parallel calling is natively supported. Without this mapping table, the model defaults to what appears most in training data -- various bash commands.
+
+### CLAUDE.md Hierarchical Discovery
+
+CLAUDE.md is a project-level instruction file, similar to `.eslintrc` but for AI. Claude Code loads it from 5 locations: global admin policy -> user home directory -> project directory (traversing upward from CWD) -> local files -> command-line specified directory.
+
+Files closer to CWD are **loaded later with higher priority** -- leveraging the LLM's recency bias, subdirectory rules can override parent directory rules.
+
+
+---
+
+> **Next chapter**: With tools and prompts in place, the next step is making the agent interactive -- CLI entry, REPL loop, and session persistence.
