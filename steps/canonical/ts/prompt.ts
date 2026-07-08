@@ -4,6 +4,7 @@ import * as os from "os";
 // The static core: identity, rules, and tool preferences. Byte-identical across
 // sessions, which is exactly what makes it cacheable (a real agent marks this
 // block with cache_control).
+//#region static_core
 const STATIC_CORE = `You are Mini Claude Code, a small coding assistant CLI.
 You help with software engineering tasks using the tools available to you.
 
@@ -24,6 +25,7 @@ You help with software engineering tasks using the tools available to you.
 # Tone and style
  - Keep responses short and concise. Lead with the answer.
  - Reference code as file_path:line_number.`;
+//#endregion
 
 // The dynamic half: environment facts assembled fresh each run. Kept separate
 // from the static core so it never pollutes the cache.

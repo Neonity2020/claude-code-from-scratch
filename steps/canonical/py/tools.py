@@ -79,6 +79,7 @@ tool_definitions = [
 
 # Dispatch a tool call by name. Unknown names return an error string instead of
 # raising, so a hallucinated tool name lets the model self-correct.
+#region dispatch
 def execute_tool(name: str, inp: dict) -> str:
     if name == "read_file":
         return _read_file(inp)
@@ -95,6 +96,7 @@ def execute_tool(name: str, inp: dict) -> str:
         return _run_shell(inp)
 #endstep
     return f"Unknown tool: {name}"
+#endregion
 
 
 #region read_file

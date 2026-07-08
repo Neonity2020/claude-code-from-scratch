@@ -80,6 +80,7 @@ export const toolDefinitions: Anthropic.Tool[] = [
 
 // Dispatch a tool call by name. Unknown names return an error string instead of
 // throwing, so a hallucinated tool name lets the model self-correct.
+//#region dispatch
 export async function executeTool(name: string, input: Record<string, any>): Promise<string> {
   switch (name) {
     case "read_file": return readFile(input as { file_path: string });
@@ -93,6 +94,7 @@ export async function executeTool(name: string, input: Record<string, any>): Pro
     default: return `Unknown tool: ${name}`;
   }
 }
+//#endregion
 
 //#region read_file
 function readFile(input: { file_path: string }): string {
