@@ -23,7 +23,9 @@
     "steps:lint": "node steps/lint-markers.mjs",
     "steps:selftest": "node steps/mock-anthropic.selftest.mjs",
     "steps:selfcheck": "node steps/test.selfcheck.mjs",
-    "steps:selftest:py": ".venv/bin/python steps/mock_anthropic.selftest.py"
+    "steps:selftest:py": ".venv/bin/python steps/mock_anthropic.selftest.py",
+    "steps:docs": "node steps/docs-sync.mjs",
+    "steps:docs:check": "node steps/docs-sync.mjs --check"
   },
   "keywords": [
     "claude-code",

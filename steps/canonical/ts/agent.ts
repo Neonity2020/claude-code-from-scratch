@@ -29,6 +29,7 @@ export class Agent {
 
   // One user turn. Call the model; if it asks for tools, run them and feed the
   // results back; repeat until it answers with plain text.
+//#region loop
   async chat(userText: string): Promise<void> {
     this.messages.push({ role: "user", content: userText });
 
@@ -72,4 +73,5 @@ export class Agent {
       this.messages.push({ role: "user", content: results });
     }
   }
+//#endregion
 }

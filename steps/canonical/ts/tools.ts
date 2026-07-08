@@ -94,6 +94,7 @@ export async function executeTool(name: string, input: Record<string, any>): Pro
   }
 }
 
+//#region read_file
 function readFile(input: { file_path: string }): string {
   try {
     const lines = readFileSync(input.file_path, "utf-8").split("\n");
@@ -102,6 +103,7 @@ function readFile(input: { file_path: string }): string {
     return `Error reading file: ${e.message}`;
   }
 }
+//#endregion
 
 //#step >=2
 function writeFile(input: { file_path: string; content: string }): string {

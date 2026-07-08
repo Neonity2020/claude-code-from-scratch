@@ -34,6 +34,7 @@ class Agent:
 
     # One user turn. Call the model; if it asks for tools, run them and feed the
     # results back; repeat until it answers with plain text.
+#region loop
     def chat(self, user_text: str) -> None:
         self.messages.append({"role": "user", "content": user_text})
 
@@ -70,3 +71,4 @@ class Agent:
                 output = execute_tool(tu.name, tu.input)
                 results.append({"type": "tool_result", "tool_use_id": tu.id, "content": output})
             self.messages.append({"role": "user", "content": results})
+#endregion

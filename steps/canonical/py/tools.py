@@ -97,12 +97,14 @@ def execute_tool(name: str, inp: dict) -> str:
     return f"Unknown tool: {name}"
 
 
+#region read_file
 def _read_file(inp: dict) -> str:
     try:
         lines = open(inp["file_path"], encoding="utf-8").read().split("\n")
         return "\n".join(f"{i + 1:4d} | {line}" for i, line in enumerate(lines))
     except Exception as e:
         return f"Error reading file: {e}"
+#endregion
 
 
 #step >=2
