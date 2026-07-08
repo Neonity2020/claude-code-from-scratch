@@ -2,7 +2,9 @@
 
 ## Chapter Goals
 
-Implement Plan Mode: have the Agent formulate a plan before executing, avoiding blind code modifications. This includes mode switching, plan file persistence, permission integration, and a 4-option approval workflow.
+Sometimes you don't want the agent touching code right away — you want to see how it plans to proceed and approve first. This chapter builds Plan Mode.
+
+It's a read-only planning mode: the agent can only read and think, not write files or run shells, and it hands its plan up in a plan file. Then you pick one of four — do it, tweak-then-do, do it yourself, or have it re-plan. The "read-only" part is enforced in code by the permission system from Chapter 6, not a prompt begging the model to behave.
 
 ```mermaid
 graph TB
@@ -24,17 +26,6 @@ graph TB
     style Exec fill:#e0ffe0
     style Manual fill:#ffe0e0
 ```
-
-## How Claude Code Does It
-
-Claude Code's Plan Mode is a complete EnterPlanMode / ExitPlanMode tool pair:
-
-1. **Enter**: Switch to read-only mode, generate a plan file (in the `~/.claude/plans/` directory), inject a plan system prompt to constrain Agent behavior
-2. **Plan**: The Agent uses read-only tools to explore the code and writes the implementation plan to the plan file
-3. **Exit**: The Agent calls ExitPlanMode, and the user sees the plan and chooses how to execute
-4. **Approve**: The user chooses to clear context and execute, keep context and execute, manually approve each edit, or continue revising
-
-Key design insight: **Plan Mode isn't about "preventing the Agent from doing things" -- it's about making the Agent think before acting**. Persisting the plan file to disk means that even if context is cleared, the plan won't be lost -- the Agent can start fresh executing an approved plan.
 
 ## Our Implementation
 
@@ -659,6 +650,19 @@ The difference between the three entry points:
 - `--plan`: Enter Plan Mode at startup; the entire session starts with planning
 - `/plan`: Switch mid-session, suitable for a "chat first, plan later" workflow
 - `enter_plan_mode` tool: The Agent decides on its own that it needs to plan before executing (requires activation via ToolSearch)
+
+## What the Real Claude Code Does Beyond This
+
+Our Plan Mode is a read-only switch plus a four-option approval box. Claude Code makes it a complete pair of tools, more deliberate about entering and leaving the planning state and how the plan is handed off.
+
+Claude Code's Plan Mode is a complete EnterPlanMode / ExitPlanMode tool pair:
+
+1. **Enter**: Switch to read-only mode, generate a plan file (in the `~/.claude/plans/` directory), inject a plan system prompt to constrain Agent behavior
+2. **Plan**: The Agent uses read-only tools to explore the code and writes the implementation plan to the plan file
+3. **Exit**: The Agent calls ExitPlanMode, and the user sees the plan and chooses how to execute
+4. **Approve**: The user chooses to clear context and execute, keep context and execute, manually approve each edit, or continue revising
+
+Key design insight: **Plan Mode isn't about "preventing the Agent from doing things" -- it's about making the Agent think before acting**. Persisting the plan file to disk means that even if context is cleared, the plan won't be lost -- the Agent can start fresh executing an approved plan.
 
 ## Design Decisions
 

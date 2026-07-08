@@ -2,7 +2,9 @@
 
 ## 本章目标
 
-实现 Plan Mode：让 Agent 先制定计划再执行，避免盲目修改代码。包含模式切换、plan 文件持久化、权限联动和 4 选项审批工作流。
+有时候不想让 agent 一上来就改代码，想先看看它打算怎么干、批准了再动手。这一章造 Plan Mode。
+
+它是一个只读的规划模式：agent 只能读和想，不能写文件、不能跑 shell，把方案写进一个 plan 文件交上来。看完你四选一——照做、改改再做、自己来、或让它重新规划。「只读」这条靠第 6 章的权限系统在代码层面强制，不是提示词求它别乱动。
 
 ```mermaid
 graph TB
@@ -24,17 +26,6 @@ graph TB
     style Exec fill:#e0ffe0
     style Manual fill:#ffe0e0
 ```
-
-## Claude Code 怎么做的
-
-Claude Code 的 Plan Mode 是完整的 EnterPlanMode / ExitPlanMode 工具对：
-
-1. **进入**：切换到 read-only 模式，生成 plan 文件（`~/.claude/plans/` 目录），注入 plan 系统提示约束 Agent 行为
-2. **规划**：Agent 用只读工具探索代码，将实现计划写入 plan 文件
-3. **退出**：Agent 调用 ExitPlanMode，用户看到计划后选择执行方式
-4. **审批**：用户选择清空上下文执行、保留上下文执行、手动审批执行、或继续修改
-
-关键设计：**Plan Mode 不是"不让 Agent 做事"，而是让 Agent 先想清楚再做**。plan 文件持久化到磁盘意味着即使清空上下文，计划也不会丢失——Agent 可以从零开始执行一个经过审批的方案。
 
 ## 我们的实现
 
@@ -659,6 +650,19 @@ if user_input == "/plan":
 - `--plan`：启动时就进入 Plan Mode，整个会话从规划开始
 - `/plan`：会话中途切换，适合"先聊后规划"的工作流
 - `enter_plan_mode` 工具：Agent 自己判断需要先规划再执行（需要通过 ToolSearch 激活）
+
+## 真实 Claude Code 比这多做了什么
+
+我们的 Plan Mode 是一个只读开关加一个四选一的审批框。Claude Code 把它做成了一对完整的工具，进出计划态、如何交接方案都更讲究。
+
+Claude Code 的 Plan Mode 是完整的 EnterPlanMode / ExitPlanMode 工具对：
+
+1. **进入**：切换到 read-only 模式，生成 plan 文件（`~/.claude/plans/` 目录），注入 plan 系统提示约束 Agent 行为
+2. **规划**：Agent 用只读工具探索代码，将实现计划写入 plan 文件
+3. **退出**：Agent 调用 ExitPlanMode，用户看到计划后选择执行方式
+4. **审批**：用户选择清空上下文执行、保留上下文执行、手动审批执行、或继续修改
+
+关键设计：**Plan Mode 不是"不让 Agent 做事"，而是让 Agent 先想清楚再做**。plan 文件持久化到磁盘意味着即使清空上下文，计划也不会丢失——Agent 可以从零开始执行一个经过审批的方案。
 
 ## 设计决策
 
