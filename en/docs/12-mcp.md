@@ -2,7 +2,9 @@
 
 ## Chapter Goals
 
-Enable the Agent to dynamically load external tools -- connect to databases, Slack, GitHub, and other services by simply declaring a server address, without modifying source code.
+So far the agent's tools are all hardcoded in `tools.ts` — adding a new one means editing source. This chapter wires up MCP, a protocol that lets the agent mount external tools dynamically.
+
+Declare a server address in config and you can pull in tools from databases, Slack, GitHub, and other services without touching a line of agent code. We build a minimal MCP client: handshake with a server over JSON-RPC over stdio, ask what tools it has, forward the model's calls to it, and bring the results back.
 
 ```mermaid
 graph TB
@@ -22,22 +24,6 @@ graph TB
 ```
 
 Core idea: **spawn child process -> JSON-RPC handshake -> discover tools -> register with prefix -> transparent routing**. From the Agent Loop's perspective, MCP tools and built-in tools are indistinguishable -- they're all name + schema + execution function.
-
-## How Claude Code Does It
-
-MCP (Model Context Protocol) is an open protocol released by Anthropic for connecting AI assistants to external tools. Key aspects of Claude Code's MCP implementation:
-
-**Configuration discovery**: Reads server configuration from three locations -- `settings.json` (user-level and project-level) and `.mcp.json` (project root), with later reads overriding earlier ones. Enterprise deployments also support MDM policy distribution.
-
-**Transport protocols**: Supports two transport methods -- stdio (child process communication) and SSE (HTTP long-polling). stdio is the mainstream choice; SSE is used for remote services.
-
-**Tool naming**: All MCP tools are registered in `mcp__serverName__toolName` format. This three-segment naming scheme simultaneously solves naming conflicts and routing -- you can tell from the name alone which server to forward to.
-
-**Connection lifecycle**: spawn process -> `initialize` handshake (exchange version and capabilities) -> `notifications/initialized` confirmation -> `tools/list` tool discovery -> ready. Both initialization and tool discovery have 15-second timeouts.
-
-**Dynamic refresh**: Claude Code supports runtime tool re-discovery (servers can notify the client that the tool list has changed); we simplify to one-time discovery.
-
-**SDK dependency**: Claude Code uses the `@anthropic-ai/sdk` built-in MCP client, which wraps JSON-RPC details. We implement raw JSON-RPC directly, with no MCP SDK dependency.
 
 ## Configuration Format
 
@@ -364,6 +350,24 @@ private async executeToolCall(name: string, input: Record<string, any>): Promise
 
 One `if` check, one forwarding call. MCP tools are completely transparent to the Agent Loop -- the model sees `mcp__filesystem__read_file`, issues a tool_use call, gets a text result back, with absolutely no difference from built-in tools.
 
+## What the Real Claude Code Does Beyond This
+
+Our MCP client supports just one transport, stdio, which is enough for local servers. Claude Code supports multiple transports and OAuth, so it can reach remote servers and ones that need authentication.
+
+MCP (Model Context Protocol) is an open protocol released by Anthropic for connecting AI assistants to external tools. Key aspects of Claude Code's MCP implementation:
+
+**Configuration discovery**: Reads server configuration from three locations -- `settings.json` (user-level and project-level) and `.mcp.json` (project root), with later reads overriding earlier ones. Enterprise deployments also support MDM policy distribution.
+
+**Transport protocols**: Supports two transport methods -- stdio (child process communication) and SSE (HTTP long-polling). stdio is the mainstream choice; SSE is used for remote services.
+
+**Tool naming**: All MCP tools are registered in `mcp__serverName__toolName` format. This three-segment naming scheme simultaneously solves naming conflicts and routing -- you can tell from the name alone which server to forward to.
+
+**Connection lifecycle**: spawn process -> `initialize` handshake (exchange version and capabilities) -> `notifications/initialized` confirmation -> `tools/list` tool discovery -> ready. Both initialization and tool discovery have 15-second timeouts.
+
+**Dynamic refresh**: Claude Code supports runtime tool re-discovery (servers can notify the client that the tool list has changed); we simplify to one-time discovery.
+
+**SDK dependency**: Claude Code uses the `@anthropic-ai/sdk` built-in MCP client, which wraps JSON-RPC details. We implement raw JSON-RPC directly, with no MCP SDK dependency.
+
 ## Key Design Decisions
 
 ### Why JSON-RPC over stdio Instead of HTTP?
@@ -400,4 +404,4 @@ A user might start the Agent just to ask "what does this function mean?" without
 
 ---
 
-> **Next chapter**: Full architecture comparison -- from ~3400 lines to 500,000, where's the gap, and what to do next.
+> **Next chapter**: Full architecture comparison -- from ~5500 lines to 500,000, where's the gap, and what to do next.
