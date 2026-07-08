@@ -100,7 +100,9 @@ if (flag("--live")) {
 
 // --- default: no-key demo against the local mock ---
 const map = JSON.parse(readFileSync(join(SCEN, "_map.json"), "utf-8"));
-const conf = map[String(n)];
+// A step may map to several scenarios (e.g. ch15); the demo runs the first.
+const mapEntry = map[String(n)];
+const conf = Array.isArray(mapEntry) ? mapEntry[0] : mapEntry;
 const scenarioPath = join(SCEN, conf.scenario + ".json");
 const scenario = JSON.parse(readFileSync(scenarioPath, "utf-8"));
 const expect = conf.expect || {};

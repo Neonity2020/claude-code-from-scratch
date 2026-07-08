@@ -83,11 +83,24 @@ export function startMock({ scenario, logPath } = {}) {
       try { body = JSON.parse(raw); } catch { res.writeHead(400); res.end("bad json"); return; }
 
       const system = typeof body.system === "string" ? body.system : (Array.isArray(body.system) ? body.system.map((b) => b.text).join("") : "");
-      // Route to a track by its `match` substring; default "main".
+      const firstUserText = (() => { const m = (body.messages || []).find((x) => x.role === "user"); return typeof m?.content === "string" ? m.content : ""; })();
+      const toolNames = (body.tools || []).map((t) => t.name);
+      // Route to an aux track by a structured match (system substring + optional
+      // firstUser / tools). Check ALL tracks, not first-hit, and fail loudly on
+      // ambiguity — a request must never match two tracks (that's a scenario bug,
+      // or a track marker string that collided with the main system prompt).
+      const matches = (t) =>
+        (!t.match || system.includes(t.match)) &&
+        (!t.firstUserContains || firstUserText.includes(t.firstUserContains)) &&
+        (!t.toolsInclude || t.toolsInclude.every((n) => toolNames.includes(n)));
+      const hits = Object.entries(tracks).filter(([name, t]) => name !== "main" && t.match && matches(t));
       let track = "main";
-      for (const [name, t] of Object.entries(tracks)) {
-        if (t.match && system.includes(t.match)) { track = name; break; }
+      if (hits.length > 1) {
+        const err = { type: "error", error: { type: "mock_ambiguous_route", message: `request matched multiple tracks: ${hits.map(([n]) => n).join(", ")}` } };
+        if (logPath) appendFileSync(logPath, JSON.stringify({ type: "ambiguous", req: reqIndex, tracks: hits.map(([n]) => n), system }) + "\n");
+        res.writeHead(500, { "content-type": "application/json" }); res.end(JSON.stringify(err)); return;
       }
+      if (hits.length === 1) track = hits[0][0];
       const turnIndex = counters[track] || 0;
       const turn = (tracks[track]?.turns || [])[turnIndex];
 
@@ -106,10 +119,10 @@ export function startMock({ scenario, logPath } = {}) {
           track,
           turnIndex,
           system,
-          tools: (body.tools || []).map((t) => t.name),
+          tools: toolNames,
           toolResults,
           messageCount: (body.messages || []).length,
-          firstUserText: (() => { const m = (body.messages || []).find((x) => x.role === "user"); return typeof m?.content === "string" ? m.content : ""; })(),
+          firstUserText,
           stream: !!body.stream,
         }) + "\n");
       }

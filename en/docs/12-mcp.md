@@ -86,19 +86,21 @@ So far the agent's tools are all hardcoded in `tools.ts` — adding a new one me
 +        tools,
          messages: this.messages,
        };
-@@ -72,4 +77,11 @@ export class Agent {
+@@ -72,4 +77,13 @@ export class Agent {
            continue;
          }
 +        // MCP tools (mcp__server__tool) are routed to the MCP server, not run locally.
 +        if (tu.name.startsWith("mcp__")) {
-+          const toolName = tu.name.replace(/^mcp__[^_]+__/, "");
++          // mcp__<server>__<tool> → <tool>; drop the first two "__" segments so a
++          // server name with underscores strips the same way Python's does.
++          const toolName = tu.name.split("__").slice(2).join("__");
 +          const output = this.mcp ? await this.mcp.callTool(toolName, tu.input) : "Denied: no MCP server connected.";
 +          results.push({ type: "tool_result", tool_use_id: tu.id, content: output });
 +          continue;
 +        }
          // Plan mode is read-only: writes and shell are denied on top of the gate.
          const blocked = checkPermission(tu.name, tu.input as Record<string, any>) === "deny"
-@@ -89,3 +101,9 @@ export class Agent {
+@@ -89,3 +103,9 @@ export class Agent {
    clearHistory(): void { this.messages = []; }
    setMode(m: string): void { this.mode = m; }
 +  private mcp: McpConnection | null = null;

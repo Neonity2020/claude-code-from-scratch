@@ -21,7 +21,17 @@ const TSC = join(REPO, "node_modules", ".bin", "tsc");
 const VENV_PY = join(REPO, ".venv", "bin", "python");
 const MCP_SERVER = join(HERE, "mcp-demo-server.mjs"); // ch12's demo MCP server
 
-function ensureBuilt() { if (!existsSync(DIST)) spawnSync("node", [join(HERE, "build.mjs")], { stdio: "inherit" }); }
+// Always lint + rebuild from canonical once per process — NEVER trust a stale
+// dist. (A broken canonical must not pass just because an old dist is green.)
+let built = false;
+function ensureBuilt() {
+  if (built) return;
+  for (const script of ["lint-markers.mjs", "build.mjs"]) {
+    const r = spawnSync("node", [join(HERE, script)], { stdio: "inherit" });
+    if (r.status !== 0) { console.error(`ensureBuilt: ${script} failed`); process.exit(1); }
+  }
+  built = true;
+}
 const stepDirs = () => readdirSync(DIST).sort();
 const stepName = (n) => stepDirs().find((s) => s.startsWith(String(n).padStart(2, "0") + "-"));
 const readLog = (p) => existsSync(p) ? readFileSync(p, "utf-8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : [];
@@ -82,17 +92,29 @@ function normalize(log) {
   });
 }
 
-// Run one step in both languages; return an array of failure strings (empty = pass).
+// Run one step in both languages; return an array of failure strings (empty =
+// pass). A step may map to one scenario or an array of them (e.g. ch15 tests
+// both /goal and --auto).
 export async function checkStep(n) {
   ensureBuilt();
   const map = JSON.parse(readFileSync(join(SCEN, "_map.json"), "utf-8"));
-  const conf = map[String(n)];
+  const entry = map[String(n)];
+  const confs = Array.isArray(entry) ? entry : [entry];
+  const fails = [];
+  for (const conf of confs) {
+    const label = confs.length > 1 ? `${n}[${conf.scenario}]` : `${n}`;
+    fails.push(...await runScenario(n, conf, label));
+  }
+  return fails;
+}
+
+async function runScenario(n, conf, label) {
   const scenarioPath = join(SCEN, conf.scenario + ".json");
   const scenario = JSON.parse(readFileSync(scenarioPath, "utf-8"));
   const expect = conf.expect || {};
   const fails = [];
   const norms = {};
-  const tag = (lang, msg) => fails.push(`step${n} ${lang}: ${msg}`);
+  const tag = (lang, msg) => fails.push(`step${label} ${lang}: ${msg}`);
 
   for (const lang of ["ts", "py"]) {
     const workdir = scratch();
@@ -109,6 +131,7 @@ export async function checkStep(n) {
     norms[lang] = normalize(log);
 
     if (log.some((e) => e.type === "exhausted")) tag(lang, "mock scenario exhausted (agent made an unexpected extra call)");
+    if (log.some((e) => e.type === "ambiguous")) tag(lang, "mock request matched more than one track (routing collision)");
     // every scripted turn consumed = one request per turn (across all tracks)
     const totalTurns = scenario.turns ? scenario.turns.length
       : Object.values(scenario.tracks || {}).reduce((s, t) => s + (t.turns?.length || 0), 0);
@@ -126,6 +149,11 @@ export async function checkStep(n) {
     if (expect.systemContains && !requests.some((e) => (e.system || "").includes(expect.systemContains))) tag(lang, `system prompt missing ${JSON.stringify(expect.systemContains)}`);
     // aux tracks (ch7 compaction, ch15 goal/classifier): the side call really happened
     for (const t of expect.tracksUsed || []) if (!requests.some((e) => e.track === t)) tag(lang, `no request on track "${t}" (the ${t} aux call didn't happen)`);
+    // exact per-track request counts (catches an aux call firing too many/few times)
+    for (const [t, c] of Object.entries(expect.trackCounts || {})) {
+      const got = requests.filter((e) => e.track === t).length;
+      if (got !== c) tag(lang, `track "${t}" had ${got} requests, expected ${c}`);
+    }
     if (expect.stdoutContains && !stdout.includes(expect.stdoutContains)) tag(lang, `stdout missing ${JSON.stringify(expect.stdoutContains)}`);
     // a request's first user message carries what we injected (ch9 skill prompt)
     if (expect.firstUserContains && !requests.some((e) => (e.firstUserText || "").includes(expect.firstUserContains))) tag(lang, `no request first-user text contained ${JSON.stringify(expect.firstUserContains)}`);
@@ -134,16 +162,20 @@ export async function checkStep(n) {
       const p = join(workdir, name);
       if (!existsSync(p) || readFileSync(p, "utf-8") !== content) tag(lang, `file ${name} not written with expected content`);
     }
+    // files that must NOT exist (e.g. a write blocked by plan/auto mode)
+    for (const name of expect.filesAbsent || []) {
+      if (existsSync(join(workdir, name))) tag(lang, `file ${name} should not exist (a blocked write leaked through)`);
+    }
     // session persistence (ch4): the session file exists, and --resume actually
     // restored the prior conversation (the original first user message is back).
     if (expect.sessionFile && !existsSync(join(workdir, expect.sessionFile))) tag(lang, `session file ${expect.sessionFile} not written`);
     if (expect.resumedFirstUser) {
-      const last = requests[requests.length - 1];
-      if (!last || !(last.firstUserText || "").includes(expect.resumedFirstUser)) tag(lang, `resume didn't restore prior context (last request first user: "${last?.firstUserText}")`);
+      const lastReq = requests[requests.length - 1];
+      if (!lastReq || !(lastReq.firstUserText || "").includes(expect.resumedFirstUser)) tag(lang, `resume didn't restore prior context (last request first user: "${lastReq?.firstUserText}")`);
     }
     rmSync(workdir, { recursive: true, force: true });
   }
-  if (norms.ts !== norms.py) fails.push(`step${n}: ts/py parity — event logs differ`);
+  if (norms.ts !== norms.py) fails.push(`step${label}: ts/py parity — event logs differ`);
   return fails;
 }
 

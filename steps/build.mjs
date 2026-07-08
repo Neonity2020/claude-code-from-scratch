@@ -82,20 +82,28 @@ function condTrue(op, num, k) {
 }
 
 // Resolve #step markers in one file's text for a target step.
-function slice(text, k) {
+function slice(text, k, file = "<canonical>") {
   const out = [];
   let inGroup = false, emitted = false, keep = false;
+  let lineNo = 0;
   for (const line of text.split("\n")) {
+    lineNo++;
     const m = line.match(MARK);
     if (m) {
+      // Every #step inside a group is an elif branch (this slicer has no nesting).
       if (!inGroup) { inGroup = true; emitted = false; }
       keep = !emitted && condTrue(m[1], Number(m[2]), k);
       if (keep) emitted = true;
       continue; // marker lines are never emitted
     }
-    if (ENDMARK.test(line)) { inGroup = false; keep = false; continue; }
+    if (ENDMARK.test(line)) {
+      if (!inGroup) throw new Error(`${file}:${lineNo}: #endstep without an open #step group`);
+      inGroup = false; keep = false; continue;
+    }
     if (!inGroup || keep) out.push(line);
   }
+  // A build must never silently ship a file with an unbalanced marker.
+  if (inGroup) throw new Error(`${file}: a #step group is not closed (missing #endstep)`);
   return out.join("\n");
 }
 
@@ -108,7 +116,7 @@ for (const step of STEPS) {
       const src = readFileSync(join(CANON, lang, file), "utf-8");
       const outPath = join(DIST, step.name, lang, file);
       mkdirSync(dirname(outPath), { recursive: true });
-      writeFileSync(outPath, slice(src, step.n));
+      writeFileSync(outPath, slice(src, step.n, `${lang}/${file}`));
       count++;
     }
     // TS steps need module resolution; emit a minimal package.json so Node

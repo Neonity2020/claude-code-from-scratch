@@ -24,7 +24,7 @@
 +import { evaluateGoal, classifyAction } from "./autonomy.js";
  
  const MODEL = process.env.MINI_MODEL || "claude-sonnet-4-5-20250929";
-@@ -84,4 +85,12 @@ export class Agent {
+@@ -86,4 +87,12 @@ export class Agent {
            continue;
          }
 +        // Auto mode: a classifier decides block/allow instead of asking a human.
@@ -37,7 +37,7 @@
 +        }
          // Plan mode is read-only: writes and shell are denied on top of the gate.
          const blocked = checkPermission(tu.name, tu.input as Record<string, any>) === "deny"
-@@ -107,3 +116,17 @@ export class Agent {
+@@ -109,3 +118,17 @@ export class Agent {
      this.mcp = await connectMcp("node", [process.env.MINI_MCP_SERVER]);
    }
 +  private transcriptText(): string {

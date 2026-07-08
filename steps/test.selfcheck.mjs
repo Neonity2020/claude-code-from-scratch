@@ -27,6 +27,18 @@ const MUTATIONS = [
     ["ts/prompt.ts", "Do not propose changes to code you haven't read. Read files first.", "BROKEN SYSTEM"],
     ["py/prompt.py", "Do not propose changes to code you haven't read. Read files first.", "BROKEN SYSTEM"],
   ]},
+  { name: "permission gate never denies", step: 6, edits: [
+    ["ts/permissions.ts", 'return "deny";', 'return "allow"; // MUTANT'],
+    ["py/permissions.py", 'return "deny"', 'return "allow"  # MUTANT'],
+  ]},
+  { name: "compaction never fires", step: 7, edits: [
+    ["ts/context.ts", "const COMPACT_THRESHOLD = 6;", "const COMPACT_THRESHOLD = 99999;"],
+    ["py/context.py", "COMPACT_THRESHOLD = 6", "COMPACT_THRESHOLD = 99999"],
+  ]},
+  { name: "auto-mode monitor never blocks", step: 15, edits: [
+    ["ts/agent.ts", "if (!verdict.allow) {", "if (false) { // MUTANT"],
+    ["py/agent.py", 'if not verdict["allow"]:', "if False:  # MUTANT"],
+  ]},
 ];
 
 let bad = 0;

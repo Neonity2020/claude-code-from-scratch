@@ -76,12 +76,25 @@ def start_mock(scenario, log_path=None):
             sys_text = body.get("system", "")
             if isinstance(sys_text, list):
                 sys_text = "".join(b.get("text", "") for b in sys_text)
-            # Route to a track by its `match` substring; default "main".
-            track = "main"
-            for name, t in tracks.items():
-                if t.get("match") and t["match"] in sys_text:
-                    track = name
-                    break
+            tool_names = [t["name"] for t in body.get("tools", [])]
+            first_user = next((m for m in body.get("messages", []) if m.get("role") == "user"), None)
+            first_user_text = first_user["content"] if first_user and isinstance(first_user.get("content"), str) else ""
+
+            # Route to an aux track by a structured match (system substring +
+            # optional firstUser / tools). Check ALL tracks and fail loudly on
+            # ambiguity — a request must never match two tracks.
+            def _matches(t):
+                return ((not t.get("match") or t["match"] in sys_text)
+                        and (not t.get("firstUserContains") or t["firstUserContains"] in first_user_text)
+                        and (not t.get("toolsInclude") or all(n in tool_names for n in t["toolsInclude"])))
+            hits = [name for name, t in tracks.items() if name != "main" and t.get("match") and _matches(t)]
+            if len(hits) > 1:
+                log({"type": "ambiguous", "req": req_index, "tracks": hits, "system": sys_text})
+                err = json.dumps({"type": "error", "error": {"type": "mock_ambiguous_route",
+                      "message": f"request matched multiple tracks: {', '.join(hits)}"}}).encode()
+                self.send_response(500); self.send_header("content-type", "application/json")
+                self.send_header("content-length", str(len(err))); self.end_headers(); self.wfile.write(err); return
+            track = hits[0] if len(hits) == 1 else "main"
             turn_index = state["counters"].get(track, 0)
             track_turns = tracks.get(track, {}).get("turns", [])
             turn = track_turns[turn_index] if turn_index < len(track_turns) else None
@@ -96,10 +109,8 @@ def start_mock(scenario, log_path=None):
                             c = b.get("content")
                             tool_results.append({"tool_use_id": b.get("tool_use_id"),
                                                  "content": c if isinstance(c, str) else json.dumps(c)})
-            first_user = next((m for m in body.get("messages", []) if m.get("role") == "user"), None)
-            first_user_text = first_user["content"] if first_user and isinstance(first_user.get("content"), str) else ""
             log({"type": "request", "req": req_index, "track": track, "turnIndex": turn_index,
-                 "system": sys_text, "tools": [t["name"] for t in body.get("tools", [])],
+                 "system": sys_text, "tools": tool_names,
                  "toolResults": tool_results, "messageCount": len(body.get("messages", [])),
                  "firstUserText": first_user_text, "stream": bool(body.get("stream"))})
 

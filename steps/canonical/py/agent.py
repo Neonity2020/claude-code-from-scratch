@@ -127,7 +127,9 @@ class Agent:
 #step >=12
                 # MCP tools (mcp__server__tool) go to the MCP server, not run locally.
                 if tu.name.startswith("mcp__"):
-                    tool_name = tu.name.split("__", 2)[-1]
+                    # mcp__<server>__<tool> -> <tool>; drop the first two "__"
+                    # segments so it strips the same way the TypeScript side does.
+                    tool_name = "__".join(tu.name.split("__")[2:])
                     output = self.mcp.call_tool(tool_name, tu.input) if self.mcp else "Denied: no MCP server connected."
                     results.append({"type": "tool_result", "tool_use_id": tu.id, "content": output})
                     continue

@@ -146,19 +146,45 @@
       "finalStopReason": "end_turn"
     }
   },
-  "15": {
-    "scenario": "pursue-goal",
-    "expect": {
-      "toolCalls": [
-        "write_file"
-      ],
-      "files": {
-        "done.txt": "ok"
-      },
-      "tracksUsed": [
-        "goal"
-      ],
-      "finalStopReason": "end_turn"
+  "15": [
+    {
+      "scenario": "pursue-goal",
+      "expect": {
+        "toolCalls": [
+          "write_file"
+        ],
+        "files": {
+          "done.txt": "ok"
+        },
+        "tracksUsed": [
+          "goal"
+        ],
+        "trackCounts": {
+          "goal": 2
+        },
+        "finalStopReason": "end_turn"
+      }
+    },
+    {
+      "scenario": "auto-blocks-write",
+      "expect": {
+        "toolCalls": [
+          "write_file"
+        ],
+        "toolResultsContain": [
+          "Blocked by auto-mode monitor"
+        ],
+        "filesAbsent": [
+          "secret.txt"
+        ],
+        "tracksUsed": [
+          "classifier"
+        ],
+        "trackCounts": {
+          "classifier": 1
+        },
+        "finalStopReason": "end_turn"
+      }
     }
-  }
+  ]
 }
