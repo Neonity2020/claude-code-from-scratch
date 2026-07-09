@@ -33,6 +33,8 @@ graph LR
 
 Last chapter the agent called the model and waited for the whole reply (`messages.create`), so the answer appeared all at once. This chapter swaps that **one** call for a streaming one (`messages.stream`), so text shows up as it's generated. Relative to last chapter, it's just this one spot in the agent loop:
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=agent.ts step=5 lang=ts -->
 ```diff
 @@ -37,8 +37,9 @@ export class Agent {
@@ -50,6 +52,26 @@ Last chapter the agent called the model and waited for the whole reply (`message
        process.stdout.write("\n");
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=agent.py step=5 lang=py -->
+```diff
+@@ -34,8 +34,10 @@ class Agent:
+             kwargs = dict(model=MODEL, max_tokens=4096, system=system, tools=tools, messages=self.messages)
+ 
+-            reply = self.client.messages.create(**kwargs)
+-            for block in reply.content:
+-                if block.type == "text":
+-                    print(block.text, end="", flush=True)
++            # Stream the reply so text shows up as it is generated, then collect
++            # the finished message (same shape a non-streaming call would return).
++            with self.client.messages.stream(**kwargs) as stream:
++                for text in stream.text_stream:
++                    print(text, end="", flush=True)
++                reply = stream.get_final_message()
+             print()
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 Run it — same behavior, but the output arrives as it is generated:
 

@@ -38,6 +38,8 @@ Core approach: **deny takes priority, and even `--yolo` can't get past it**. den
 
 Last chapter's agent ran whatever tool the model asked for, no questions asked — including `rm -rf`. This chapter adds a permission gate: every tool call is checked first, and a dangerous one is blocked before it ever runs. Relative to last chapter, it adds a `permissions.ts`, and the agent loop checks before executing a tool:
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=agent.ts step=6 lang=ts -->
 ```diff
 @@ -2,4 +2,5 @@ import Anthropic from "@anthropic-ai/sdk";
@@ -58,6 +60,29 @@ Last chapter's agent ran whatever tool the model asked for, no questions asked �
        }
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=agent.py step=6 lang=py -->
+```diff
+@@ -6,4 +6,5 @@ import anthropic
+ from tools import tool_definitions, execute_tool
+ from prompt import build_system_prompt
++from permissions import check_permission
+ 
+ MODEL = os.environ.get("MINI_MODEL", "claude-sonnet-4-5-20250929")
+@@ -54,5 +55,9 @@ class Agent:
+             for tu in tool_uses:
+                 print(f"  → {tu.name}({json.dumps(tu.input)})")
+-                output = execute_tool(tu.name, tu.input)
++                # Check permission before running the tool; a denied call never runs.
++                if check_permission(tu.name, tu.input) == "deny":
++                    output = f"Denied: {tu.name} was blocked by the permission system."
++                else:
++                    output = execute_tool(tu.name, tu.input)
+                 results.append({"type": "tool_result", "tool_use_id": tu.id, "content": output})
+             self.messages.append({"role": "user", "content": results})
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 The gate itself is a list of dangerous commands plus one check:
 

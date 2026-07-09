@@ -33,6 +33,8 @@ graph TB
 
 有时候不想让 agent 一上来就改代码，想先看看它打算怎么干、批准了再动手。这一章造 Plan Mode：一个只读模式，`--plan` 下 agent 能读能想，但写文件、跑 shell 全被拦下——靠的正是第 6 章那道权限闸，多加一条「plan 模式禁写」。相对上一章，agent 多了个 `mode`，执行工具前多判一次：
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=agent.ts step=10 lang=ts -->
 ```diff
 @@ -13,4 +13,5 @@ export class Agent {
@@ -61,6 +63,38 @@ graph TB
  }
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=agent.py step=10 lang=py -->
+```diff
+@@ -25,4 +25,5 @@ class Agent:
+         self.client = anthropic.Anthropic(**kwargs)
+         self.messages: list = []
++        self.mode = "default"  # "plan" makes the agent read-only
+ 
+     # One user turn. Call the model; if it asks for tools, run them and feed the
+@@ -61,9 +62,9 @@ class Agent:
+             for tu in tool_uses:
+                 print(f"  → {tu.name}({json.dumps(tu.input)})")
+-                # Check permission before running the tool; a denied call never runs.
+-                if check_permission(tu.name, tu.input) == "deny":
+-                    output = f"Denied: {tu.name} was blocked by the permission system."
+-                else:
+-                    output = execute_tool(tu.name, tu.input)
++                # Plan mode is read-only: writes and shell are denied on top of the gate.
++                blocked = check_permission(tu.name, tu.input) == "deny" or (
++                    self.mode == "plan" and tu.name in ("write_file", "edit_file", "run_shell"))
++                output = f"Denied: {tu.name} was blocked ({self.mode} mode)." if blocked \
++                    else execute_tool(tu.name, tu.input)
+                 results.append({"type": "tool_result", "tool_use_id": tu.id, "content": output})
+             self.messages.append({"role": "user", "content": results})
+@@ -78,2 +79,4 @@ class Agent:
+     def clear_history(self) -> None:
+         self.messages = []
++    def set_mode(self, m: str) -> None:
++        self.mode = m
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 跑一下，`--plan` 下模型想写 `report.txt`，闸门以「plan mode」为由拦下，什么都没写：
 

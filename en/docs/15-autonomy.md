@@ -16,6 +16,8 @@ One sentence captures the division of labor: `/goal` decides **whether** to cont
 
 The teaching track (`steps/`) implements two of these as runnable minimal versions: `/goal` (the evaluator reinjection loop) and `--auto` (a classifier replacing the confirmation dialog); `/loop` is only discussed below, not in the minimal implementation. Relative to chapter 12, it adds an `autonomy.ts`, and the agent gains a `pursueGoal` plus an auto-mode intercept:
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=agent.ts step=15 lang=ts -->
 ```diff
 @@ -7,4 +7,5 @@ import { recallMemories } from "./memory.js";
@@ -57,6 +59,48 @@ The teaching track (`steps/`) implements two of these as runnable minimal versio
  }
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=agent.py step=15 lang=py -->
+```diff
+@@ -11,4 +11,5 @@ from memory import recall_memories
+ from subagent import run_sub_agent
+ from mcp_client import connect_mcp
++from autonomy import evaluate_goal, classify_action
+ 
+ MODEL = os.environ.get("MINI_MODEL", "claude-sonnet-4-5-20250929")
+@@ -82,4 +83,10 @@ class Agent:
+                     results.append({"type": "tool_result", "tool_use_id": tu.id, "content": output})
+                     continue
++                # Auto mode: a classifier decides block/allow instead of asking a human.
++                if self.mode == "auto" and tu.name in ("write_file", "edit_file", "run_shell"):
++                    verdict = classify_action(tu.name, tu.input, self._transcript_text(), self.client, MODEL)
++                    if not verdict["allow"]:
++                        results.append({"type": "tool_result", "tool_use_id": tu.id, "content": f"Blocked by auto-mode monitor: {verdict['reason']}"})
++                        continue
+                 # Plan mode is read-only: writes and shell are denied on top of the gate.
+                 blocked = check_permission(tu.name, tu.input) == "deny" or (
+@@ -105,2 +112,18 @@ class Agent:
+         if self.mcp is None and os.environ.get("MINI_MCP_SERVER"):
+             self.mcp = connect_mcp("node", [os.environ["MINI_MCP_SERVER"]])
++    def _transcript_text(self):
++        return "\n".join(
++            f"{m['role']}: {m['content'] if isinstance(m.get('content'), str) else '[tool call / result]'}"
++            for m in self.messages)
++
++    # Autonomy: keep working until an independent evaluator judges the condition met.
++    def pursue_goal(self, condition, prompt):
++        self.chat(prompt)
++        for _ in range(5):
++            verdict = evaluate_goal(condition, self._transcript_text(), self.client, MODEL)
++            if verdict["met"]:
++                print(f"✓ goal met: {condition}")
++                return
++            print(f"  (goal not met — {verdict['reason']}; continuing)")
++            self.chat(f'The goal "{condition}" is not met yet: {verdict["reason"]}. Keep working toward it.')
++        print(f"  (gave up after 5 iterations without meeting: {condition})")
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 The evaluator is just one independent side call that judges "met, or not-met + reason" — the reason gets reinjected into the next turn:
 

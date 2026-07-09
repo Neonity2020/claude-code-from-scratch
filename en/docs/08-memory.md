@@ -26,6 +26,8 @@ graph TB
 
 So far the agent's "memory" is just that message array — close the session and it forgets everything. This chapter gives it long-term memory across sessions: facts saved as small files on disk, and before each turn the ones relevant to the current question are pulled into the System Prompt. Relative to last chapter, it adds a `memory.ts`, and the agent appends recalled memories to the system prompt before calling the model:
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=agent.ts step=8 lang=ts -->
 ```diff
 @@ -4,4 +4,5 @@ import { buildSystemPrompt } from "./prompt.js";
@@ -43,6 +45,25 @@ So far the agent's "memory" is just that message array — close the session and
        // model tool-aware. Chapter 5 turns the call itself into a stream.
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=agent.py step=8 lang=py -->
+```diff
+@@ -8,4 +8,5 @@ from prompt import build_system_prompt
+ from permissions import check_permission
+ from context import maybe_compact
++from memory import recall_memories
+ 
+ MODEL = os.environ.get("MINI_MODEL", "claude-sonnet-4-5-20250929")
+@@ -35,4 +36,6 @@ class Agent:
+             self.messages = maybe_compact(self.messages, self.client, MODEL)
+             system = build_system_prompt()
++            # Recall memories relevant to what the user just asked, into the prompt.
++            system += recall_memories(user_text)
+             tools = tool_definitions
+             kwargs = dict(model=MODEL, max_tokens=4096, system=system, tools=tools, messages=self.messages)
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 Recall is just "the memories whose words overlap the question, top few by relevance" — deterministic, no extra model call:
 

@@ -57,6 +57,8 @@ graph TB
 
 到现在，agent 的工具全写死在 `tools.ts` 里——想加个新工具就得改源码。这一章接上 MCP：一个让 agent 动态挂载外部工具的协议。声明一个服务器，就能把它的工具接进来，不动一行 agent 逻辑。相对上一章，新增了一个 `mcp.ts`，agent 启动时连上服务器、把发现的工具（带 `mcp__` 前缀）并进工具表，调用时再路由回去：
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=agent.ts step=12 lang=ts -->
 ```diff
 @@ -6,4 +6,5 @@ import { maybeCompact } from "./context.js";
@@ -112,6 +114,60 @@ graph TB
  }
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=agent.py step=12 lang=py -->
+```diff
+@@ -10,4 +10,5 @@ from context import maybe_compact
+ from memory import recall_memories
+ from subagent import run_sub_agent
++from mcp_client import connect_mcp
+ 
+ MODEL = os.environ.get("MINI_MODEL", "claude-sonnet-4-5-20250929")
+@@ -27,4 +28,5 @@ class Agent:
+         self.messages: list = []
+         self.mode = "default"  # "plan" makes the agent read-only
++        self.mcp = None
+ 
+     # One user turn. Call the model; if it asks for tools, run them and feed the
+@@ -33,4 +35,5 @@ class Agent:
+     def chat(self, user_text: str) -> None:
+         self.messages.append({"role": "user", "content": user_text})
++        self._ensure_mcp()  # discover external MCP tools before the loop
+ 
+         while True:
+@@ -40,5 +43,8 @@ class Agent:
+             # Recall memories relevant to what the user just asked, into the prompt.
+             system += recall_memories(user_text)
+-            tools = tool_definitions
++            # Merge in any external MCP tools, prefixed so we can route their calls back.
++            mcp_tools = [{"name": f"mcp__demo__{t['name']}", "description": t["description"], "input_schema": t["input_schema"]}
++                         for t in (self.mcp.tools if self.mcp else [])]
++            tools = tool_definitions + mcp_tools
+             kwargs = dict(model=MODEL, max_tokens=4096, system=system, tools=tools, messages=self.messages)
+ 
+@@ -68,4 +74,12 @@ class Agent:
+                     results.append({"type": "tool_result", "tool_use_id": tu.id, "content": summary})
+                     continue
++                # MCP tools (mcp__server__tool) go to the MCP server, not run locally.
++                if tu.name.startswith("mcp__"):
++                    # mcp__<server>__<tool> -> <tool>; drop the first two "__"
++                    # segments so it strips the same way the TypeScript side does.
++                    tool_name = "__".join(tu.name.split("__")[2:])
++                    output = self.mcp.call_tool(tool_name, tu.input) if self.mcp else "Denied: no MCP server connected."
++                    results.append({"type": "tool_result", "tool_use_id": tu.id, "content": output})
++                    continue
+                 # Plan mode is read-only: writes and shell are denied on top of the gate.
+                 blocked = check_permission(tu.name, tu.input) == "deny" or (
+@@ -87,2 +101,6 @@ class Agent:
+     def set_mode(self, m: str) -> None:
+         self.mode = m
++    # Connect to the MCP server named in MINI_MCP_SERVER once, on first use.
++    def _ensure_mcp(self):
++        if self.mcp is None and os.environ.get("MINI_MCP_SERVER"):
++            self.mcp = connect_mcp("node", [os.environ["MINI_MCP_SERVER"]])
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 MCP 客户端就是「spawn 服务器子进程，用 stdio 上的 JSON-RPC 握手、发现工具、调用工具」——这正是 MCP 的精髓（真实 MCP 还有多种传输和鉴权，这里只留 stdio）：
 

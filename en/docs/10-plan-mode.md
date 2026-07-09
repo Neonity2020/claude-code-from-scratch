@@ -33,6 +33,8 @@ graph TB
 
 Sometimes you don't want the agent touching code right away — you want to see the plan and approve first. This chapter builds Plan Mode: a read-only mode where, under `--plan`, the agent can read and think but every write or shell call is blocked — enforced by the same permission gate from Chapter 6, plus one rule "no writes in plan mode". Relative to last chapter, the agent gains a `mode` and one extra check before running a tool:
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=agent.ts step=10 lang=ts -->
 ```diff
 @@ -13,4 +13,5 @@ export class Agent {
@@ -61,6 +63,38 @@ Sometimes you don't want the agent touching code right away — you want to see 
  }
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=agent.py step=10 lang=py -->
+```diff
+@@ -25,4 +25,5 @@ class Agent:
+         self.client = anthropic.Anthropic(**kwargs)
+         self.messages: list = []
++        self.mode = "default"  # "plan" makes the agent read-only
+ 
+     # One user turn. Call the model; if it asks for tools, run them and feed the
+@@ -61,9 +62,9 @@ class Agent:
+             for tu in tool_uses:
+                 print(f"  → {tu.name}({json.dumps(tu.input)})")
+-                # Check permission before running the tool; a denied call never runs.
+-                if check_permission(tu.name, tu.input) == "deny":
+-                    output = f"Denied: {tu.name} was blocked by the permission system."
+-                else:
+-                    output = execute_tool(tu.name, tu.input)
++                # Plan mode is read-only: writes and shell are denied on top of the gate.
++                blocked = check_permission(tu.name, tu.input) == "deny" or (
++                    self.mode == "plan" and tu.name in ("write_file", "edit_file", "run_shell"))
++                output = f"Denied: {tu.name} was blocked ({self.mode} mode)." if blocked \
++                    else execute_tool(tu.name, tu.input)
+                 results.append({"type": "tool_result", "tool_use_id": tu.id, "content": output})
+             self.messages.append({"role": "user", "content": results})
+@@ -78,2 +79,4 @@ class Agent:
+     def clear_history(self) -> None:
+         self.messages = []
++    def set_mode(self, m: str) -> None:
++        self.mode = m
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 Run it: under `--plan` the model wants to write `report.txt`, but the gate blocks it as "plan mode", so nothing is written:
 

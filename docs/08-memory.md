@@ -26,6 +26,8 @@ graph TB
 
 到现在，agent 的「记忆」还只是那个消息数组——会话一关就全忘了。这一章给它跨会话的长期记忆：事实写成磁盘上的小文件，每次对话前按当前问题的相关度捞回几条、拼进 System Prompt。相对上一章，新增了一个 `memory.ts`，agent 调模型前把召回的记忆追加到系统提示里：
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=agent.ts step=8 lang=ts -->
 ```diff
 @@ -4,4 +4,5 @@ import { buildSystemPrompt } from "./prompt.js";
@@ -43,6 +45,25 @@ graph TB
        // model tool-aware. Chapter 5 turns the call itself into a stream.
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=agent.py step=8 lang=py -->
+```diff
+@@ -8,4 +8,5 @@ from prompt import build_system_prompt
+ from permissions import check_permission
+ from context import maybe_compact
++from memory import recall_memories
+ 
+ MODEL = os.environ.get("MINI_MODEL", "claude-sonnet-4-5-20250929")
+@@ -35,4 +36,6 @@ class Agent:
+             self.messages = maybe_compact(self.messages, self.client, MODEL)
+             system = build_system_prompt()
++            # Recall memories relevant to what the user just asked, into the prompt.
++            system += recall_memories(user_text)
+             tools = tool_definitions
+             kwargs = dict(model=MODEL, max_tokens=4096, system=system, tools=tools, messages=self.messages)
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 召回就是「跟当前问题词有重叠的记忆，取相关度最高的几条」——确定性、不额外调模型：
 

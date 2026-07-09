@@ -34,6 +34,8 @@ graph TB
 
 有些提示词会反复用到——「读 diff、写 commit message」这套，每次手打一遍很烦。这一章给 agent 造技能：把这类 prompt 存成文件，`/commit` 一声就调起来，像 shell 脚本一样即装即用。相对上一章，新增了一个 `skills.ts`，CLI 收到 `/name` 就把它换成那个技能的 prompt：
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=cli.ts step=9 lang=ts -->
 ```diff
 @@ -3,4 +3,5 @@ import { pathToFileURL } from "url";
@@ -59,6 +61,33 @@ graph TB
          ask();
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=__main__.py step=9 lang=py -->
+```diff
+@@ -4,4 +4,5 @@ import sys
+ from agent import Agent
+ from session import save_session, load_session
++from skills import resolve_skill
+ 
+ 
+@@ -28,5 +29,6 @@ def main(argv=None) -> None:
+     one_shot = " ".join(argv).strip()
+     if one_shot:
+-        text = one_shot
++        # "/name ..." runs a skill's prompt template; anything else is a message.
++        text = resolve_skill(one_shot) or one_shot
+         agent.chat(text)
+         save_session(agent.history())
+@@ -48,5 +50,5 @@ def main(argv=None) -> None:
+             continue
+         if line:
+-            agent.chat(line)
++            agent.chat(resolve_skill(line) or line)
+         if line:
+             save_session(agent.history())
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 一个技能就是一个文件；解析就是「以 `/` 开头就去 `.mini-skills/` 找同名文件，读出它的 prompt」：
 

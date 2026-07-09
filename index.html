@@ -242,6 +242,12 @@
       transform: translateY(-2px);
       box-shadow: 0 4px 16px rgba(124, 92, 252, 0.3);
     }
+    /* Diff blocks (```diff): GitHub-style green/red lines, readable in light + dark */
+    .token.inserted { color: #22863a; background: rgba(46, 160, 67, 0.15); display: inline-block; width: 100%; }
+    .token.deleted  { color: #b31d28; background: rgba(248, 81, 73, 0.15); display: inline-block; width: 100%; }
+    .token.coord    { color: #6a737d; }
+    [data-theme="dark"] .token.inserted { color: #7ee787; background: rgba(46, 160, 67, 0.20); }
+    [data-theme="dark"] .token.deleted  { color: #ffa198; background: rgba(248, 81, 73, 0.20); }
   </style>
 </head>
 <body>
@@ -480,5 +486,6 @@
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-python.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-bash.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-json.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1/components/prism-diff.min.js"></script>
 </body>
 </html>

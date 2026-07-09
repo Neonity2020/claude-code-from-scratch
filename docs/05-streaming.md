@@ -33,6 +33,8 @@ graph LR
 
 上一章 agent 调模型是一次性等完（`messages.create`），答案会「啪」地一次全出现。这一章把那**一处**调用换成流式（`messages.stream`），文字边生成边显示。相对上一章，agent 循环里就换了这一处：
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=agent.ts step=5 lang=ts -->
 ```diff
 @@ -37,8 +37,9 @@ export class Agent {
@@ -50,6 +52,26 @@ graph LR
        process.stdout.write("\n");
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=agent.py step=5 lang=py -->
+```diff
+@@ -34,8 +34,10 @@ class Agent:
+             kwargs = dict(model=MODEL, max_tokens=4096, system=system, tools=tools, messages=self.messages)
+ 
+-            reply = self.client.messages.create(**kwargs)
+-            for block in reply.content:
+-                if block.type == "text":
+-                    print(block.text, end="", flush=True)
++            # Stream the reply so text shows up as it is generated, then collect
++            # the finished message (same shape a non-streaming call would return).
++            with self.client.messages.stream(**kwargs) as stream:
++                for text in stream.text_stream:
++                    print(text, end="", flush=True)
++                reply = stream.get_final_message()
+             print()
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 跑一下，行为一样、只是输出边生成边来：
 

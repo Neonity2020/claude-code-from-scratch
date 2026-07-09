@@ -38,6 +38,8 @@ graph TD
 
 第 1 章说过，消息数组每一轮都在变长。跑久了它迟早撑爆模型的上下文窗口。这一章加压缩：消息一多，就用一次额外的模型调用把旧消息总结成一段摘要，替换掉原文，只留最近几条。相对上一章，新增了一个 `context.ts`，agent 每次调模型前先过一遍压缩：
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=agent.ts step=7 lang=ts -->
 ```diff
 @@ -3,4 +3,5 @@ import { toolDefinitions, executeTool } from "./tools.js";
@@ -55,6 +57,25 @@ graph TD
        // Build the request once. Passing `tools` is the one line that makes the
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=agent.py step=7 lang=py -->
+```diff
+@@ -7,4 +7,5 @@ from tools import tool_definitions, execute_tool
+ from prompt import build_system_prompt
+ from permissions import check_permission
++from context import maybe_compact
+ 
+ MODEL = os.environ.get("MINI_MODEL", "claude-sonnet-4-5-20250929")
+@@ -31,4 +32,6 @@ class Agent:
+ 
+         while True:
++            # Before each model call, compact the history if it has grown too long.
++            self.messages = maybe_compact(self.messages, self.client, MODEL)
+             system = build_system_prompt()
+             tools = tool_definitions
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 压缩本身就是「超过阈值就摘要旧消息」：
 

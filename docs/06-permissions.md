@@ -38,6 +38,8 @@ graph TB
 
 上一章的 agent 会无条件执行模型要调的任何工具——包括 `rm -rf`。这一章给它加一道权限闸：每次调工具前先过一遍检查，危险的直接拦下、根本不执行。相对上一章，新增了一个 `permissions.ts`，agent 循环里执行工具前插了一次检查：
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=agent.ts step=6 lang=ts -->
 ```diff
 @@ -2,4 +2,5 @@ import Anthropic from "@anthropic-ai/sdk";
@@ -58,6 +60,29 @@ graph TB
        }
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=agent.py step=6 lang=py -->
+```diff
+@@ -6,4 +6,5 @@ import anthropic
+ from tools import tool_definitions, execute_tool
+ from prompt import build_system_prompt
++from permissions import check_permission
+ 
+ MODEL = os.environ.get("MINI_MODEL", "claude-sonnet-4-5-20250929")
+@@ -54,5 +55,9 @@ class Agent:
+             for tu in tool_uses:
+                 print(f"  → {tu.name}({json.dumps(tu.input)})")
+-                output = execute_tool(tu.name, tu.input)
++                # Check permission before running the tool; a denied call never runs.
++                if check_permission(tu.name, tu.input) == "deny":
++                    output = f"Denied: {tu.name} was blocked by the permission system."
++                else:
++                    output = execute_tool(tu.name, tu.input)
+                 results.append({"type": "tool_result", "tool_use_id": tu.id, "content": output})
+             self.messages.append({"role": "user", "content": results})
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 闸门本身就是一张危险命令清单加一个判断：
 

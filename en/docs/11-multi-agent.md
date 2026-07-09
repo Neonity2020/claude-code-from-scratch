@@ -36,6 +36,8 @@ graph TB
 
 Cram a big task into one agent and the context fills up fast. This chapter builds sub-agents: the main agent, through an `agent` tool, forks an independent sub-agent to chew on a sub-task — the sub-agent has its own clean context, runs a small read-only loop in-process (recursion), and brings back only the result. Relative to last chapter, it adds a `subagent.ts`, and the agent loop intercepts the `agent` tool:
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=agent.ts step=11 lang=ts -->
 ```diff
 @@ -5,4 +5,5 @@ import { checkPermission } from "./permissions.js";
@@ -57,6 +59,28 @@ Cram a big task into one agent and the context fills up fast. This chapter build
          const blocked = checkPermission(tu.name, tu.input as Record<string, any>) === "deny"
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=agent.py step=11 lang=py -->
+```diff
+@@ -9,4 +9,5 @@ from permissions import check_permission
+ from context import maybe_compact
+ from memory import recall_memories
++from subagent import run_sub_agent
+ 
+ MODEL = os.environ.get("MINI_MODEL", "claude-sonnet-4-5-20250929")
+@@ -62,4 +63,9 @@ class Agent:
+             for tu in tool_uses:
+                 print(f"  → {tu.name}({json.dumps(tu.input)})")
++                # The `agent` tool forks a read-only sub-agent with its own context.
++                if tu.name == "agent":
++                    summary = run_sub_agent(tu.input.get("task", ""), self.client, MODEL)
++                    results.append({"type": "tool_result", "tool_use_id": tu.id, "content": summary})
++                    continue
+                 # Plan mode is read-only: writes and shell are denied on top of the gate.
+                 blocked = check_permission(tu.name, tu.input) == "deny" or (
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 A sub-agent is just a read-only mini-loop — give it only the read tools, and report back the final text when it is done:
 

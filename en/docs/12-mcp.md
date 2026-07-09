@@ -57,6 +57,8 @@ You can also use `.mcp.json` in the project root, with the same format. Servers 
 
 So far the agent's tools are all hardcoded in `tools.ts` — adding a new one means editing source. This chapter wires up MCP, a protocol that lets the agent mount external tools dynamically: declare a server and its tools plug in, without touching a line of agent logic. Relative to last chapter, it adds an `mcp.ts`, and the agent connects to the server on startup, merges its discovered tools (prefixed `mcp__`) into the tool list, and routes calls back to it:
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=agent.ts step=12 lang=ts -->
 ```diff
 @@ -6,4 +6,5 @@ import { maybeCompact } from "./context.js";
@@ -112,6 +114,60 @@ So far the agent's tools are all hardcoded in `tools.ts` — adding a new one me
  }
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=agent.py step=12 lang=py -->
+```diff
+@@ -10,4 +10,5 @@ from context import maybe_compact
+ from memory import recall_memories
+ from subagent import run_sub_agent
++from mcp_client import connect_mcp
+ 
+ MODEL = os.environ.get("MINI_MODEL", "claude-sonnet-4-5-20250929")
+@@ -27,4 +28,5 @@ class Agent:
+         self.messages: list = []
+         self.mode = "default"  # "plan" makes the agent read-only
++        self.mcp = None
+ 
+     # One user turn. Call the model; if it asks for tools, run them and feed the
+@@ -33,4 +35,5 @@ class Agent:
+     def chat(self, user_text: str) -> None:
+         self.messages.append({"role": "user", "content": user_text})
++        self._ensure_mcp()  # discover external MCP tools before the loop
+ 
+         while True:
+@@ -40,5 +43,8 @@ class Agent:
+             # Recall memories relevant to what the user just asked, into the prompt.
+             system += recall_memories(user_text)
+-            tools = tool_definitions
++            # Merge in any external MCP tools, prefixed so we can route their calls back.
++            mcp_tools = [{"name": f"mcp__demo__{t['name']}", "description": t["description"], "input_schema": t["input_schema"]}
++                         for t in (self.mcp.tools if self.mcp else [])]
++            tools = tool_definitions + mcp_tools
+             kwargs = dict(model=MODEL, max_tokens=4096, system=system, tools=tools, messages=self.messages)
+ 
+@@ -68,4 +74,12 @@ class Agent:
+                     results.append({"type": "tool_result", "tool_use_id": tu.id, "content": summary})
+                     continue
++                # MCP tools (mcp__server__tool) go to the MCP server, not run locally.
++                if tu.name.startswith("mcp__"):
++                    # mcp__<server>__<tool> -> <tool>; drop the first two "__"
++                    # segments so it strips the same way the TypeScript side does.
++                    tool_name = "__".join(tu.name.split("__")[2:])
++                    output = self.mcp.call_tool(tool_name, tu.input) if self.mcp else "Denied: no MCP server connected."
++                    results.append({"type": "tool_result", "tool_use_id": tu.id, "content": output})
++                    continue
+                 # Plan mode is read-only: writes and shell are denied on top of the gate.
+                 blocked = check_permission(tu.name, tu.input) == "deny" or (
+@@ -87,2 +101,6 @@ class Agent:
+     def set_mode(self, m: str) -> None:
+         self.mode = m
++    # Connect to the MCP server named in MINI_MCP_SERVER once, on first use.
++    def _ensure_mcp(self):
++        if self.mcp is None and os.environ.get("MINI_MCP_SERVER"):
++            self.mcp = connect_mcp("node", [os.environ["MINI_MCP_SERVER"]])
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 The MCP client is just "spawn the server subprocess, handshake over JSON-RPC on its stdio, discover tools, call tools" — the essence of MCP (real MCP has more transports and auth; here we keep stdio only):
 

@@ -36,6 +36,8 @@ graph TB
 
 一个大任务全塞进一个 agent，上下文很快就满了。这一章造子 agent：主 agent 通过一个 `agent` 工具派生出一个独立的子 agent 去啃某个子任务——子 agent 有自己干净的上下文，进程内递归地跑一个只读的小循环，啃完只把结果带回来。相对上一章，新增了一个 `subagent.ts`，agent 循环里 `agent` 工具单独拦一下：
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=agent.ts step=11 lang=ts -->
 ```diff
 @@ -5,4 +5,5 @@ import { checkPermission } from "./permissions.js";
@@ -57,6 +59,28 @@ graph TB
          const blocked = checkPermission(tu.name, tu.input as Record<string, any>) === "deny"
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=agent.py step=11 lang=py -->
+```diff
+@@ -9,4 +9,5 @@ from permissions import check_permission
+ from context import maybe_compact
+ from memory import recall_memories
++from subagent import run_sub_agent
+ 
+ MODEL = os.environ.get("MINI_MODEL", "claude-sonnet-4-5-20250929")
+@@ -62,4 +63,9 @@ class Agent:
+             for tu in tool_uses:
+                 print(f"  → {tu.name}({json.dumps(tu.input)})")
++                # The `agent` tool forks a read-only sub-agent with its own context.
++                if tu.name == "agent":
++                    summary = run_sub_agent(tu.input.get("task", ""), self.client, MODEL)
++                    results.append({"type": "tool_result", "tool_use_id": tu.id, "content": summary})
++                    continue
+                 # Plan mode is read-only: writes and shell are denied on top of the gate.
+                 blocked = check_permission(tu.name, tu.input) == "deny" or (
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 子 agent 就是一个只读的迷你循环——只给它读工具，跑完把最后那段文本回报：
 

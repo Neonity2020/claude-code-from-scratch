@@ -31,6 +31,8 @@ graph TB
 
 上一章的 agent 每次都从空白开始——进程一关，聊过的全忘了。这一章给它加上会话：每轮把消息数组存到磁盘，`--resume` 时读回来接着聊。相对上一章，新增了一个 `session.ts`，`cli.ts` 也长出了 `--resume` 和 `/clear`：
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=cli.ts step=4 lang=ts -->
 ```diff
 @@ -2,4 +2,5 @@ import * as readline from "readline";
@@ -67,6 +69,49 @@ graph TB
        });
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=__main__.py step=4 lang=py -->
+```diff
+@@ -3,4 +3,5 @@ import sys
+ 
+ from agent import Agent
++from session import save_session, load_session
+ 
+ 
+@@ -16,4 +17,12 @@ def main(argv=None) -> None:
+ 
+     agent = Agent()
++    # --resume: reload the saved conversation before doing anything else.
++    resume = "--resume" in argv
++    argv = [a for a in argv if a != "--resume"]
++    if resume:
++        saved = load_session()
++        if saved:
++            agent.load_history(saved)
++            print(f"(resumed {len(saved)} messages)")
+ 
+     one_shot = " ".join(argv).strip()
+@@ -21,4 +30,5 @@ def main(argv=None) -> None:
+         text = one_shot
+         agent.chat(text)
++        save_session(agent.history())
+         return
+ 
+@@ -32,6 +42,13 @@ def main(argv=None) -> None:
+         if line in ("exit", "quit"):
+             break
++        if line == "/clear":
++            agent.clear_history()
++            save_session(agent.history())
++            print("(history cleared)")
++            continue
+         if line:
+             agent.chat(line)
++        if line:
++            save_session(agent.history())
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 会话本身很朴素——整段对话本来就是个消息数组，存盘就是把它写成 JSON：
 

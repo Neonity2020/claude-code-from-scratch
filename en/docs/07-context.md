@@ -38,6 +38,8 @@ graph TD
 
 Chapter 1 noted that the message array grows every turn. Run long enough and it overflows the model's context window. This chapter adds compaction: when the history gets long, one extra model call summarizes the older messages into a paragraph, replacing them and keeping only the recent few. Relative to last chapter, it adds a `context.ts`, and the agent compacts before each model call:
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=agent.ts step=7 lang=ts -->
 ```diff
 @@ -3,4 +3,5 @@ import { toolDefinitions, executeTool } from "./tools.js";
@@ -55,6 +57,25 @@ Chapter 1 noted that the message array grows every turn. Run long enough and it 
        // Build the request once. Passing `tools` is the one line that makes the
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=agent.py step=7 lang=py -->
+```diff
+@@ -7,4 +7,5 @@ from tools import tool_definitions, execute_tool
+ from prompt import build_system_prompt
+ from permissions import check_permission
++from context import maybe_compact
+ 
+ MODEL = os.environ.get("MINI_MODEL", "claude-sonnet-4-5-20250929")
+@@ -31,4 +32,6 @@ class Agent:
+ 
+         while True:
++            # Before each model call, compact the history if it has grown too long.
++            self.messages = maybe_compact(self.messages, self.client, MODEL)
+             system = build_system_prompt()
+             tools = tool_definitions
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 Compaction itself is just "summarize the older messages once past a threshold":
 

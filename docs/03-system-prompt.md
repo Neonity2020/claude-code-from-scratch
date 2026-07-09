@@ -30,6 +30,8 @@ graph TB
 
 上一章的 agent 用的还是一句写死的 system prompt。这一章造 `prompt.ts`，给它一份真正的静态核心（身份、规则、工具偏好）加一段动态环境。相对上一章，`agent.ts` 里就换了一行——把写死的那句换成 `buildSystemPrompt()`：
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=agent.ts step=3 lang=ts -->
 ```diff
 @@ -1,12 +1,8 @@
@@ -55,6 +57,34 @@ graph TB
        // model tool-aware. Chapter 5 turns the call itself into a stream.
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=agent.py step=3 lang=py -->
+```diff
+@@ -5,13 +5,8 @@ import anthropic
+ 
+ from tools import tool_definitions, execute_tool
++from prompt import build_system_prompt
+ 
+ MODEL = os.environ.get("MINI_MODEL", "claude-sonnet-4-5-20250929")
+ 
+-# A minimal, hard-coded system prompt. Chapter 3 replaces this with a real
+-# static-core-plus-environment prompt built in prompt.py.
+-SYSTEM_PROMPT = (
+-    "You are Mini Claude Code, a small coding assistant that helps with software "
+-    "tasks. Use the tools to read and change files. Keep answers short."
+-)
+ 
+ 
+@@ -35,5 +30,5 @@ class Agent:
+ 
+         while True:
+-            system = SYSTEM_PROMPT
++            system = build_system_prompt()
+             tools = tool_definitions
+             kwargs = dict(model=MODEL, max_tokens=4096, system=system, tools=tools, messages=self.messages)
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 跑一下，它现在带着完整的 system prompt 干活：
 

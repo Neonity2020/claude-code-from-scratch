@@ -34,6 +34,8 @@ graph TB
 
 Some prompts get reused constantly — the "read the diff, write a commit message" routine is tedious to retype. This chapter gives the agent skills: save such a prompt as a file and invoke it with `/commit`, install-and-use like a shell script. Relative to last chapter, it adds a `skills.ts`, and the CLI turns a `/name` into that skill's prompt:
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=cli.ts step=9 lang=ts -->
 ```diff
 @@ -3,4 +3,5 @@ import { pathToFileURL } from "url";
@@ -59,6 +61,33 @@ Some prompts get reused constantly — the "read the diff, write a commit messag
          ask();
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=__main__.py step=9 lang=py -->
+```diff
+@@ -4,4 +4,5 @@ import sys
+ from agent import Agent
+ from session import save_session, load_session
++from skills import resolve_skill
+ 
+ 
+@@ -28,5 +29,6 @@ def main(argv=None) -> None:
+     one_shot = " ".join(argv).strip()
+     if one_shot:
+-        text = one_shot
++        # "/name ..." runs a skill's prompt template; anything else is a message.
++        text = resolve_skill(one_shot) or one_shot
+         agent.chat(text)
+         save_session(agent.history())
+@@ -48,5 +50,5 @@ def main(argv=None) -> None:
+             continue
+         if line:
+-            agent.chat(line)
++            agent.chat(resolve_skill(line) or line)
+         if line:
+             save_session(agent.history())
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 A skill is just a file; resolving one is "if it starts with `/`, find the same-named file under `.mini-skills/` and read its prompt":
 

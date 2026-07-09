@@ -31,6 +31,8 @@ graph TB
 
 Last chapter's agent started blank every time — close the process and everything you said was gone. This chapter gives it a session: save the message array to disk after every turn, read it back on `--resume`. Relative to last chapter, it adds a `session.ts`, and `cli.ts` grows `--resume` and `/clear`:
 
+<!-- tabs:start -->
+#### **TypeScript**
 <!-- @diff file=cli.ts step=4 lang=ts -->
 ```diff
 @@ -2,4 +2,5 @@ import * as readline from "readline";
@@ -67,6 +69,49 @@ Last chapter's agent started blank every time — close the process and everythi
        });
 ```
 <!-- @enddiff -->
+#### **Python**
+<!-- @diff file=__main__.py step=4 lang=py -->
+```diff
+@@ -3,4 +3,5 @@ import sys
+ 
+ from agent import Agent
++from session import save_session, load_session
+ 
+ 
+@@ -16,4 +17,12 @@ def main(argv=None) -> None:
+ 
+     agent = Agent()
++    # --resume: reload the saved conversation before doing anything else.
++    resume = "--resume" in argv
++    argv = [a for a in argv if a != "--resume"]
++    if resume:
++        saved = load_session()
++        if saved:
++            agent.load_history(saved)
++            print(f"(resumed {len(saved)} messages)")
+ 
+     one_shot = " ".join(argv).strip()
+@@ -21,4 +30,5 @@ def main(argv=None) -> None:
+         text = one_shot
+         agent.chat(text)
++        save_session(agent.history())
+         return
+ 
+@@ -32,6 +42,13 @@ def main(argv=None) -> None:
+         if line in ("exit", "quit"):
+             break
++        if line == "/clear":
++            agent.clear_history()
++            save_session(agent.history())
++            print("(history cleared)")
++            continue
+         if line:
+             agent.chat(line)
++        if line:
++            save_session(agent.history())
+```
+<!-- @enddiff -->
+<!-- tabs:end -->
 
 The session itself is plain — the whole conversation is already a message array, so saving it is just writing JSON:
 
